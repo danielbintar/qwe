@@ -5,5 +5,10 @@ authors = ["@danielbintar <daniel_bintar@yahoo.com>"]
 edition = "2018"
 
 [dependencies]
-nalgebra = "0.16.13"
-kiss3d = "0.17.1"
+conrod_core = "0.62"
+piston2d-graphics = "0.28"
+pistoncore-input = "0.23.0"
+piston_window = "0.85"
+find_folder = "0.3.0"
+conrod_piston = "0.62.0"
+rand = "0.6.4"
