@@ -8,9 +8,17 @@ use self::piston_window::OpenGL;
 use self::piston_window::texture::UpdateTexture;
 
 use qwe::core::flash_message::FlashMessage;
+use qwe::core::object::user::User;
+
+use std::collections::HashMap;
 
 #[macro_use] extern crate conrod_core;
 extern crate rand;
+
+extern crate reqwest;
+extern crate serde_derive;
+extern crate serde;
+extern crate serde_json;
 
 pub const WIN_W: u32 = 600;
 pub const WIN_H: u32 = 420;
@@ -29,6 +37,28 @@ impl LoginForm {
             password,
             notice: None,
         }
+    }
+}
+
+pub fn login_request(login_form: &mut LoginForm) {
+    let mut map = HashMap::new();
+    map.insert("username", &login_form.username[..]);
+    map.insert("password", &login_form.password[..]);
+
+    let mut resp = reqwest::Client::new()
+        .post("http://localhost:3333/users/sign_in")
+        .json(&map)
+        .send().unwrap();
+
+    if resp.status().is_success() {
+        let user: User = resp.json().unwrap();
+        let notice = format!("Hello, {}", user.username);
+        login_form.notice = Some(FlashMessage::new(notice));
+    } else if resp.status().is_server_error() {
+        login_form.notice = Some(FlashMessage::new(String::from("server error!")));
+    } else {
+        let notice = format!("Something else happened. Status: {:?}", resp.status());
+        login_form.notice = Some(FlashMessage::new(notice))
     }
 }
 
@@ -121,7 +151,7 @@ pub fn gui(ui: &mut conrod_core::UiCell, ids: &Ids, login_form: &mut LoginForm) 
         .align_middle_x_of(ids.canvas)
         .set(ids.button, ui)
     {
-        login_form.notice = Some(FlashMessage::new(String::from("Fail to login")));
+        login_request(login_form)
     }
 
     if let Some(notice) = &login_form.notice {
