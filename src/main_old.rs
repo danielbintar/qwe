@@ -7,9 +7,13 @@ use self::piston_window::{G2d, G2dTexture, TextureSettings};
 use self::piston_window::OpenGL;
 use self::piston_window::texture::UpdateTexture;
 
-use qwe::core::state::State;
+use qwe::core::flash_message::FlashMessage;
+use qwe::core::object::user::User;
+use qwe::core::world::World;
 
-extern crate conrod_core;
+use std::collections::HashMap;
+
+#[macro_use] extern crate conrod_core;
 extern crate rand;
 
 extern crate reqwest;
@@ -19,6 +23,46 @@ extern crate serde_json;
 
 pub const WIN_W: u32 = 600;
 pub const WIN_H: u32 = 420;
+
+pub struct LoginForm {
+    username: String,
+    password: String,
+    notice: Option<FlashMessage>,
+}
+
+
+impl LoginForm {
+    pub fn new(username: String, password: String) -> Self {
+        LoginForm {
+            username,
+            password,
+            notice: None,
+        }
+    }
+}
+
+pub fn login_request(login_form: &mut LoginForm, world: &mut World) {
+    let mut map = HashMap::new();
+    map.insert("username", &login_form.username[..]);
+    map.insert("password", &login_form.password[..]);
+
+    let mut resp = reqwest::Client::new()
+        .post("http://localhost:3333/users/sign_in")
+        .json(&map)
+        .send().unwrap();
+
+    if resp.status().is_success() {
+        world.current_user = Some(resp.json().unwrap());
+        // let user: User = resp.json().unwrap();
+        // let notice = format!("Hello, {}", user.username);
+        // login_form.notice = Some(FlashMessage::new(notice));
+    } else if resp.status().is_server_error() {
+        login_form.notice = Some(FlashMessage::new(String::from("server error!")));
+    } else {
+        let notice = format!("Something else happened. Status: {:?}", resp.status());
+        login_form.notice = Some(FlashMessage::new(notice))
+    }
+}
 
 pub fn theme() -> conrod_core::Theme {
     use conrod_core::position::{Align, Direction, Padding, Position, Relative};
@@ -42,7 +86,105 @@ pub fn theme() -> conrod_core::Theme {
     }
 }
 
+widget_ids! {
+    pub struct Ids {
+        canvas,
+        title,
+        description,
+        username,
+        password,
+        button,
+        flash,
+    }
+}
+
+pub fn gui(ui: &mut conrod_core::UiCell, ids: &Ids, login_form: &mut LoginForm, world: &mut World) {
+    use conrod_core::{widget, Labelable, Positionable, Sizeable, Widget};
+
+    const MARGIN: conrod_core::Scalar = 30.0;
+    const TITLE_SIZE: conrod_core::FontSize = 42;
+
+    const TITLE: &'static str = "Immortal";
+    widget::Canvas::new().pad(MARGIN).scroll_kids_vertically().set(ids.canvas, ui);
+
+    widget::Text::new(TITLE).font_size(TITLE_SIZE).mid_top_of(ids.canvas).set(ids.title, ui);
+
+    const DESCRIPTION: &'static str = "Game for eternity!";
+    widget::Text::new(DESCRIPTION)
+        .padded_w_of(ids.canvas, MARGIN)
+        .down_from(ids.title, 50.0)
+        .align_middle_x_of(ids.canvas)
+        .center_justify()
+        .line_spacing(5.0)
+        .set(ids.description, ui);
+
+    for event in widget::TextBox::new(&login_form.username[..])
+        .padded_w_of(ids.canvas, MARGIN)
+        .down_from(ids.title, 100.0)
+        .align_middle_x_of(ids.canvas)
+        .center_justify()
+        .set(ids.username, ui)
+    {
+        match event {
+            conrod_core::widget::text_box::Event::Update(text) => login_form.username = text,
+            _ => println!("enter pressed")
+        }
+    }
+
+    for event in widget::TextBox::new(&login_form.password[..])
+        .padded_w_of(ids.canvas, MARGIN)
+        .down_from(ids.title, 120.0)
+        .align_middle_x_of(ids.canvas)
+        .center_justify()
+        .set(ids.password, ui)
+    {
+        match event {
+            conrod_core::widget::text_box::Event::Update(text) => login_form.password = text,
+            _ => println!("enter pressed")
+        }
+    }
+
+    let side = 150.0;
+
+    for _press in widget::Button::new()
+        .label("LOGIN")
+        .down_from(ids.title, 150.0)
+        .w_h(side, side)
+        .align_middle_x_of(ids.canvas)
+        .set(ids.button, ui)
+    {
+        login_request(login_form, world)
+    }
+
+
+    let notice =
+        match &world.current_user {
+            Some(current_user) => format!("Hello, {}", current_user.username),
+            None => String::from("Hello, guest"),
+        };
+
+    widget::Text::new(&notice[..])
+            .padded_w_of(ids.canvas, MARGIN)
+            .down_from(ids.button, 100.0)
+            .align_middle_x_of(ids.canvas)
+            .center_justify()
+            .line_spacing(5.0)
+            .set(ids.flash, ui);
+
+    // if let Some(notice) = &login_form.notice {
+    //     widget::Text::new(&notice.text[..])
+    //         .padded_w_of(ids.canvas, MARGIN)
+    //         .down_from(ids.button, 100.0)
+    //         .align_middle_x_of(ids.canvas)
+    //         .center_justify()
+    //         .line_spacing(5.0)
+    //         .set(ids.flash, ui);
+    // }
+}
+
 pub fn main() {
+    let mut world = World::new();
+
     const WIDTH: u32 = 1920;
     const HEIGHT: u32 = 1080;
 
@@ -58,8 +200,6 @@ pub fn main() {
     let mut ui = conrod_core::UiBuilder::new([WIDTH as f64, HEIGHT as f64])
         .theme(theme())
         .build();
-
-    let mut state = State::new(&mut ui);
 
     let assets = find_folder::Search::KidsThenParents(3, 5).for_folder("assets").unwrap();
     let font_path = assets.join("fonts/FiraSans-Regular.ttf");
@@ -82,7 +222,11 @@ pub fn main() {
         (cache, texture)
     };
 
+    let ids = Ids::new(ui.widget_id_generator());
+
     let image_map = conrod_core::image::Map::new();
+
+    let mut login_form = LoginForm::new(String::from("username"), String::from("password"));
 
     while let Some(event) = window.next() {
 
@@ -94,7 +238,7 @@ pub fn main() {
 
         event.update(|_| {
             let mut ui = ui.set_widgets();
-            state.perform(&mut ui);
+            gui(&mut ui, &ids, &mut login_form, &mut world);
         });
 
         window.draw_2d(&event, |context, graphics| {

@@ -1,5 +1,3 @@
-use crate::core::state::State;
-
 pub enum Page {
     Login,
     Menu
