@@ -17,6 +17,10 @@ extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
 
+extern crate ws;
+use ws::{connect, Handler, Sender, Handshake, Result, Message};
+use std::thread;
+
 pub const WIN_W: u32 = 600;
 pub const WIN_H: u32 = 420;
 
@@ -42,6 +46,22 @@ pub fn theme() -> conrod_core::Theme {
     }
 }
 
+struct Client {
+    out: Sender,
+}
+
+impl Handler for Client {
+
+    fn on_open(&mut self, _: Handshake) -> Result<()> {
+        self.out.send("Hello WebSocket")
+    }
+
+    fn on_message(&mut self, msg: Message) -> Result<()> {
+        println!("Got message: {}", msg);
+        Ok(())
+    }
+}
+
 pub fn main() {
     const WIDTH: u32 = 1920;
     const HEIGHT: u32 = 1080;
@@ -60,6 +80,11 @@ pub fn main() {
         .build();
 
     let mut state = State::new(&mut ui);
+
+
+    thread::spawn( ||
+        connect("ws://127.0.0.1:3333/chat", |out| Client { out: out } ).unwrap()
+    );
 
     let assets = find_folder::Search::KidsThenParents(3, 5).for_folder("assets").unwrap();
     let font_path = assets.join("fonts/FiraSans-Regular.ttf");
