@@ -18,8 +18,9 @@ extern crate serde;
 extern crate serde_json;
 
 extern crate ws;
-use ws::{connect, Handler, Sender, Handshake, Result, Message};
+use ws::{connect, Frame, Handler, Sender, Handshake, Result, Message};
 use std::thread;
+use std::sync::mpsc;
 
 pub const WIN_W: u32 = 600;
 pub const WIN_H: u32 = 420;
@@ -46,18 +47,32 @@ pub fn theme() -> conrod_core::Theme {
     }
 }
 
-struct Client {
+struct Client<'a> {
     out: Sender,
+    tx: &'a std::sync::mpsc::Sender<String>,
+    rx: &'a std::sync::mpsc::Receiver<String>,
 }
 
-impl Handler for Client {
+impl<'a> Handler for Client<'a> {
+
+    fn on_frame(&mut self, frame: Frame) -> Result<Option<Frame>> {
+        let received = self.rx.try_recv();
+        match received {
+            Ok(msg) => {
+                self.out.send(msg).unwrap();
+            },
+            Err(_) => { self.out.ping(Vec::new()).unwrap(); }
+        }
+        Ok(Some(frame))
+    }
 
     fn on_open(&mut self, _: Handshake) -> Result<()> {
-        self.out.send("Hello WebSocket")
+        self.out.ping(Vec::new()).unwrap();
+        Ok(())
     }
 
     fn on_message(&mut self, msg: Message) -> Result<()> {
-        println!("Got message: {}", msg);
+        self.tx.send(msg.to_string()).unwrap();
         Ok(())
     }
 }
@@ -82,9 +97,14 @@ pub fn main() {
     let mut state = State::new(&mut ui);
 
 
-    thread::spawn( ||
-        connect("ws://127.0.0.1:3333/chat", |out| Client { out: out } ).unwrap()
-    );
+    let (tx_receive, rx_receive) = mpsc::channel();
+    let (tx_send, rx_send) = mpsc::channel();
+    state.chat_receiver = Some(&rx_receive);
+    state.chat_sender = Some(&tx_send);
+
+    thread::spawn(move || {
+        connect("ws://127.0.0.1:3333/chat", |out| Client { out: out, tx: &tx_receive, rx: &rx_send } ).unwrap()
+    });
 
     let assets = find_folder::Search::KidsThenParents(3, 5).for_folder("assets").unwrap();
     let font_path = assets.join("fonts/FiraSans-Regular.ttf");

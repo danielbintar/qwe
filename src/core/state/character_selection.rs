@@ -23,7 +23,7 @@ impl CharacterSelection {
         }
     }
 
-    pub fn perform(&mut self, ui: &mut conrod_core::UiCell, content: &mut Content) {
+    pub fn perform(&mut self, ui: &mut conrod_core::UiCell, content: &mut Content, chat_sender: Option<&std::sync::mpsc::Sender<String>>) {
         use conrod_core::{widget, Labelable, Positionable, Sizeable, Widget};
 
         const MARGIN: conrod_core::Scalar = 30.0;
@@ -79,7 +79,7 @@ impl CharacterSelection {
             .align_middle_x_of(self.ids.canvas)
             .set(self.ids.button, ui)
         {
-            self.send_message(content)
+            self.send_message(content, chat_sender)
         }
 
         let mut c = String::from("");
@@ -98,7 +98,7 @@ impl CharacterSelection {
             .set(self.ids.chat, ui);
     }
 
-    fn send_message(&mut self, content: &mut Content) {
+    fn send_message(&mut self, content: &mut Content, chat_sender: Option<&std::sync::mpsc::Sender<String>>) {
         let mut c = String::from("");
         match &content.current_user {
             Some(current_user) => {
@@ -108,6 +108,9 @@ impl CharacterSelection {
             None => {},
         };
         c.push_str(&content.current_chat[..]);
-        content.chat.push(c)
+        match &chat_sender {
+            Some(sender) => { sender.send(c).unwrap(); }
+            None => {}
+        }
     }
 }
