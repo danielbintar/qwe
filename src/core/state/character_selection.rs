@@ -7,8 +7,6 @@ pub struct CharacterSelection {
 widget_ids! {
     struct Ids {
         canvas,
-        title,
-        description,
         flash,
         current_chat,
         button,
@@ -27,21 +25,8 @@ impl CharacterSelection {
         use conrod_core::{widget, Labelable, Positionable, Sizeable, Widget};
 
         const MARGIN: conrod_core::Scalar = 30.0;
-        const TITLE_SIZE: conrod_core::FontSize = 42;
 
-        const TITLE: &'static str = "Immortal";
         widget::Canvas::new().pad(MARGIN).scroll_kids_vertically().set(self.ids.canvas, ui);
-
-        widget::Text::new(TITLE).font_size(TITLE_SIZE).mid_top_of(self.ids.canvas).set(self.ids.title, ui);
-
-        const DESCRIPTION: &'static str = "Game for eternity!";
-        widget::Text::new(DESCRIPTION)
-            .padded_w_of(self.ids.canvas, MARGIN)
-            .down_from(self.ids.title, 50.0)
-            .align_middle_x_of(self.ids.canvas)
-            .center_justify()
-            .line_spacing(5.0)
-            .set(self.ids.description, ui);
 
        let notice =
             match &content.current_user {
@@ -51,7 +36,7 @@ impl CharacterSelection {
 
         widget::Text::new(&notice[..])
                 .padded_w_of(self.ids.canvas, MARGIN)
-                .down_from(self.ids.title, 100.0)
+                .mid_top_of(self.ids.canvas)
                 .align_middle_x_of(self.ids.canvas)
                 .center_justify()
                 .line_spacing(5.0)
