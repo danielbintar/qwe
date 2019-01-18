@@ -50,7 +50,7 @@ impl Login {
         const TITLE_SIZE: conrod_core::FontSize = 42;
 
         const TITLE: &'static str = "Immortal";
-        widget::Canvas::new().pad(MARGIN).scroll_kids_vertically().set(self.ids.canvas, ui);
+        widget::Canvas::new().pad(MARGIN).set(self.ids.canvas, ui);
 
         widget::Text::new(TITLE).font_size(TITLE_SIZE).mid_top_of(self.ids.canvas).set(self.ids.title, ui);
 

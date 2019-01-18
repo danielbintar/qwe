@@ -1,9 +1,13 @@
+mod content;
+
 mod login;
 mod character_selection;
-mod content;
+mod town;
+
 
 use self::login::Login;
 use self::character_selection::CharacterSelection;
+use self::town::Town;
 use self::content::Content;
 
 pub struct State<'a> {
@@ -14,11 +18,13 @@ pub struct State<'a> {
 
     character_selection_page: CharacterSelection,
     login_page: Login,
+    town_page: Town,
 }
 
 enum Page {
     Login,
     CharacterSelection,
+    Town,
 }
 
 impl<'a> State<'a> {
@@ -30,6 +36,7 @@ impl<'a> State<'a> {
             chat_receiver: None,
             chat_sender: None,
             character_selection_page: CharacterSelection::new(ui),
+            town_page: Town::new(ui),
         }
     }
 
@@ -45,8 +52,15 @@ impl<'a> State<'a> {
                 }
             },
             Page::CharacterSelection => {
-                self.character_selection_page.perform(ui, &mut self.content, self.chat_sender);
+                self.character_selection_page.perform(ui);
+                if self.character_selection_page.change_state {
+                    let temp = self.character_selection_page.clone();
+                    self.change_state_from_character_selection_page(temp);
+                }
             },
+            Page::Town => {
+                self.town_page.perform(ui, &mut self.content, self.chat_sender)
+            }
         }
     }
 
@@ -54,6 +68,15 @@ impl<'a> State<'a> {
         match x.action {
             Some(login::Action::Success) => {
                 self.current_page = Page::CharacterSelection
+            },
+            None => {},
+        }
+    }
+
+    fn change_state_from_character_selection_page(&mut self, x: CharacterSelection) {
+        match x.action {
+            Some(character_selection::Action::EnterGame) => {
+                self.current_page = Page::Town
             },
             None => {},
         }
