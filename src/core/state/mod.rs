@@ -1,5 +1,4 @@
 mod content;
-
 mod login;
 mod character_selection;
 mod town;
@@ -19,6 +18,8 @@ pub struct State<'a> {
     character_selection_page: CharacterSelection,
     login_page: Login,
     town_page: Town,
+
+    player_sprite_id: uuid::Uuid,
 }
 
 enum Page {
@@ -28,7 +29,7 @@ enum Page {
 }
 
 impl<'a> State<'a> {
-    pub fn new(ui: &mut conrod_core::Ui) -> Self {
+    pub fn new(ui: &mut conrod_core::Ui, player_sprite_id: uuid::Uuid) -> Self {
         Self {
             login_page: Login::new(ui),
             current_page: Page::Login,
@@ -37,10 +38,12 @@ impl<'a> State<'a> {
             chat_sender: None,
             character_selection_page: CharacterSelection::new(ui),
             town_page: Town::new(ui),
+
+            player_sprite_id,
         }
     }
 
-    pub fn perform(&mut self, ui: &mut conrod_core::UiCell) {
+    pub fn perform<I: graphics::ImageSize>(&mut self, ui: &mut conrod_core::UiCell, scene: &mut sprite::Scene<I>, event: &piston_window::Event) {
         self.manage_chat();
 
         match &mut self.current_page {
@@ -59,7 +62,7 @@ impl<'a> State<'a> {
                 }
             },
             Page::Town => {
-                self.town_page.perform(ui, &mut self.content, self.chat_sender)
+                self.town_page.perform(ui, &mut self.content, self.chat_sender, scene, self.player_sprite_id, &event)
             }
         }
     }

@@ -1,9 +1,13 @@
 extern crate find_folder;
 extern crate piston_window;
 extern crate conrod_piston;
+extern crate sprite;
+extern crate piston;
 
-use self::piston_window::{PistonWindow, UpdateEvent, Window, WindowSettings};
-use self::piston_window::{G2d, G2dTexture, TextureSettings};
+use sprite::{Sprite, Scene};
+
+use self::piston_window::{PistonWindow, Window, WindowSettings};
+use self::piston_window::{G2d, G2dTexture, TextureSettings, Texture, Flip};
 use self::piston_window::OpenGL;
 use self::piston_window::texture::UpdateTexture;
 
@@ -21,6 +25,7 @@ extern crate ws;
 use ws::{connect, Frame, Handler, Sender, Handshake, Result, Message};
 use std::thread;
 use std::sync::mpsc;
+use std::rc::Rc;
 
 pub const WIN_W: u32 = 600;
 pub const WIN_H: u32 = 420;
@@ -94,7 +99,22 @@ pub fn main() {
         .theme(theme())
         .build();
 
-    let mut state = State::new(&mut ui);
+    let assets = find_folder::Search::KidsThenParents(3, 5).for_folder("assets").unwrap();
+
+    let mut scene = Scene::new();
+
+    let tex = Rc::new(Texture::from_path(
+            &mut window.factory,
+            assets.join("sprites/player/idle1.png"),
+            Flip::None,
+            &TextureSettings::new()
+    ).unwrap());
+    let mut sprite = Sprite::from_texture(tex.clone());
+    sprite.set_position(-500.0, -500.0);
+    let id = scene.add_child(sprite);
+
+
+    let mut state = State::new(&mut ui, id);
 
 
     let (tx_receive, rx_receive) = mpsc::channel();
@@ -106,7 +126,6 @@ pub fn main() {
         connect("ws://127.0.0.1:3333/chat", |out| Client { out: out, tx: &tx_receive, rx: &rx_send } ).unwrap()
     });
 
-    let assets = find_folder::Search::KidsThenParents(3, 5).for_folder("assets").unwrap();
     let font_path = assets.join("fonts/FiraSans-Regular.ttf");
     ui.fonts.insert_from_file(font_path).unwrap();
 
@@ -130,6 +149,7 @@ pub fn main() {
     let image_map = conrod_core::image::Map::new();
 
     while let Some(event) = window.next() {
+        scene.event(&event);
 
         let size = window.size();
         let (win_w, win_h) = (size.width as conrod_core::Scalar, size.height as conrod_core::Scalar);
@@ -137,12 +157,11 @@ pub fn main() {
             ui.handle_event(e);
         }
 
-        event.update(|_| {
-            let mut ui = ui.set_widgets();
-            state.perform(&mut ui);
-        });
+        let mut ui = ui.set_widgets();
+        state.perform(&mut ui, &mut scene, &event.clone());
 
         window.draw_2d(&event, |context, graphics| {
+            scene.draw(context.transform, graphics);
             if let Some(primitives) = ui.draw_if_changed() {
 
                 let cache_queued_glyphs = |graphics: &mut G2d,

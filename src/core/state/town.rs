@@ -1,4 +1,6 @@
 use crate::core::state::content::Content;
+use piston_window::Event;
+use piston::input::{Input, Button};
 
 pub struct Town {
     ids: Ids,
@@ -21,7 +23,7 @@ impl Town {
         }
     }
 
-    pub fn perform(&mut self, ui: &mut conrod_core::UiCell, content: &mut Content, chat_sender: Option<&std::sync::mpsc::Sender<String>>) {
+    pub fn perform<I: graphics::ImageSize>(&mut self, ui: &mut conrod_core::UiCell, content: &mut Content, chat_sender: Option<&std::sync::mpsc::Sender<String>>, scene: &mut sprite::Scene<I>, player_sprite: uuid::Uuid, event: &Event) {
         use conrod_core::{widget, Labelable, Positionable, Sizeable, Widget};
 
         const MARGIN: conrod_core::Scalar = 30.0;
@@ -67,6 +69,34 @@ impl Town {
             .center_justify()
             .line_spacing(5.0)
             .set(self.ids.chat, ui);
+
+        let temp = scene.child_mut(player_sprite);
+        match temp {
+            Some(x) => { x.set_position(content.current_character.position.x, content.current_character.position.y) },
+            None => {}
+        }
+
+        self.handle_input(ui, content, event);
+    }
+
+    fn handle_input(&mut self, ui: &mut conrod_core::UiCell, content: &mut Content, event: &Event) {
+        if let Event::Input(input) = event {
+            if let Input::Button(button_args) = input {
+                if let Button::Keyboard(key) = button_args.button {
+                    let mut moving = false;
+                    match key {
+                        input::keyboard::Key::Up => { content.current_character.position.y -= 10.0; moving = true },
+                        input::keyboard::Key::Down => { content.current_character.position.y += 10.0; moving = true },
+                        input::keyboard::Key::Right => { content.current_character.position.x += 10.0; moving = true },
+                        input::keyboard::Key::Left => { content.current_character.position.x -= 10.0; moving = true },
+                        _ => {}
+                    }
+                    if moving {
+                        ui.needs_redraw()
+                    }
+                }
+            }
+        }
     }
 
     fn send_message(&mut self, content: &mut Content, chat_sender: Option<&std::sync::mpsc::Sender<String>>) {
