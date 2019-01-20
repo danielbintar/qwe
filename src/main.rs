@@ -12,6 +12,7 @@ use self::piston_window::OpenGL;
 use self::piston_window::texture::UpdateTexture;
 
 use qwe::core::state::State;
+use qwe::core::websocket::chat::Client;
 
 extern crate conrod_core;
 extern crate rand;
@@ -22,7 +23,7 @@ extern crate serde;
 extern crate serde_json;
 
 extern crate ws;
-use ws::{connect, Frame, Handler, Sender, Handshake, Result, Message};
+use ws::{connect};
 use std::thread;
 use std::sync::mpsc;
 use std::rc::Rc;
@@ -49,36 +50,6 @@ pub fn theme() -> conrod_core::Theme {
         widget_styling: conrod_core::theme::StyleMap::default(),
         mouse_drag_threshold: 0.0,
         double_click_threshold: std::time::Duration::from_millis(500),
-    }
-}
-
-struct Client<'a> {
-    out: Sender,
-    tx: &'a std::sync::mpsc::Sender<String>,
-    rx: &'a std::sync::mpsc::Receiver<String>,
-}
-
-impl<'a> Handler for Client<'a> {
-
-    fn on_frame(&mut self, frame: Frame) -> Result<Option<Frame>> {
-        let received = self.rx.try_recv();
-        match received {
-            Ok(msg) => {
-                self.out.send(msg).unwrap();
-            },
-            Err(_) => { self.out.ping(Vec::new()).unwrap(); }
-        }
-        Ok(Some(frame))
-    }
-
-    fn on_open(&mut self, _: Handshake) -> Result<()> {
-        self.out.ping(Vec::new()).unwrap();
-        Ok(())
-    }
-
-    fn on_message(&mut self, msg: Message) -> Result<()> {
-        self.tx.send(msg.to_string()).unwrap();
-        Ok(())
     }
 }
 
@@ -123,7 +94,7 @@ pub fn main() {
     state.chat_sender = Some(&tx_send);
 
     thread::spawn(move || {
-        connect("ws://127.0.0.1:3333/chat", |out| Client { out: out, tx: &tx_receive, rx: &rx_send } ).unwrap()
+        connect("ws://127.0.0.1:3333/chat", |out| Client::new(out, &tx_receive, &rx_send) ).unwrap()
     });
 
     let font_path = assets.join("fonts/FiraSans-Regular.ttf");
