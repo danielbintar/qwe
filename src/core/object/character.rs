@@ -8,8 +8,8 @@ impl Character {
     pub fn new() -> Self {
         Self{
             position: Position{
-                x: 100.0,
-                y: 100.0,
+                x: 5,
+                y: 5,
             }
         }
     }

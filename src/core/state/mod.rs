@@ -9,17 +9,19 @@ use self::character_selection::CharacterSelection;
 use self::town::Town;
 use self::content::Content;
 
-pub struct State<'a> {
+pub struct State<'a, I: graphics::ImageSize> {
     current_page: Page,
     pub chat_receiver: Option<&'a std::sync::mpsc::Receiver<String>>,
     pub chat_sender: Option<&'a std::sync::mpsc::Sender<String>>,
+    pub move_receiver: Option<&'a std::sync::mpsc::Receiver<String>>,
+    pub move_sender: Option<&'a std::sync::mpsc::Sender<String>>,
     pub content: Content,
 
     character_selection_page: CharacterSelection,
     login_page: Login,
     town_page: Town,
 
-    player_sprite_id: uuid::Uuid,
+    player_tex: std::rc::Rc<I>,
 }
 
 enum Page {
@@ -28,23 +30,26 @@ enum Page {
     Town,
 }
 
-impl<'a> State<'a> {
-    pub fn new(ui: &mut conrod_core::Ui, player_sprite_id: uuid::Uuid) -> Self {
+impl<'a, I: graphics::ImageSize> State<'a, I> {
+    pub fn new(ui: &mut conrod_core::Ui, player_tex: std::rc::Rc<I>) -> Self {
         Self {
             login_page: Login::new(ui),
             current_page: Page::Login,
             content: Content::new(),
             chat_receiver: None,
             chat_sender: None,
+            move_receiver: None,
+            move_sender: None,
             character_selection_page: CharacterSelection::new(ui),
             town_page: Town::new(ui),
 
-            player_sprite_id,
+            player_tex,
         }
     }
 
-    pub fn perform<I: graphics::ImageSize>(&mut self, ui: &mut conrod_core::UiCell, scene: &mut sprite::Scene<I>, event: &piston_window::Event) {
+    pub fn perform(&mut self, ui: &mut conrod_core::UiCell, scene: &mut sprite::Scene<I>, event: &piston_window::Event) {
         self.manage_chat();
+        self.manage_move(scene, ui);
 
         match &mut self.current_page {
             Page::Login => {
@@ -58,11 +63,11 @@ impl<'a> State<'a> {
                 self.character_selection_page.perform(ui);
                 if self.character_selection_page.change_state {
                     let temp = self.character_selection_page.clone();
-                    self.change_state_from_character_selection_page(temp);
+                    self.change_state_from_character_selection_page(temp, scene);
                 }
             },
             Page::Town => {
-                self.town_page.perform(ui, &mut self.content, self.chat_sender, scene, self.player_sprite_id, &event)
+                self.town_page.perform(ui, &mut self.content, self.chat_sender, &event, self.move_sender)
             }
         }
     }
@@ -76,10 +81,11 @@ impl<'a> State<'a> {
         }
     }
 
-    fn change_state_from_character_selection_page(&mut self, x: CharacterSelection) {
+    fn change_state_from_character_selection_page(&mut self, x: CharacterSelection, scene: &mut sprite::Scene<I>) {
         match x.action {
             Some(character_selection::Action::EnterGame) => {
-                self.current_page = Page::Town
+                self.current_page = Page::Town;
+                self.town_page.start(scene, self.player_tex.clone())
             },
             None => {},
         }
@@ -91,6 +97,19 @@ impl<'a> State<'a> {
                 let received = rx.try_recv();
                 match received {
                     Ok(msg) => self.content.chat.push(msg),
+                    Err(_) => {}
+                }
+            },
+            None => {},
+        }
+    }
+
+    fn manage_move(&mut self, scene: &mut sprite::Scene<I>, ui: &mut conrod_core::UiCell) {
+        match self.move_receiver {
+            Some(rx) => {
+                let received = rx.try_recv();
+                match received {
+                    Ok(msg) => self.town_page.manage_move(msg, scene, ui),
                     Err(_) => {}
                 }
             },

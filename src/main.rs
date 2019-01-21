@@ -4,7 +4,7 @@ extern crate conrod_piston;
 extern crate sprite;
 extern crate piston;
 
-use sprite::{Sprite, Scene};
+use sprite::Scene;
 
 use self::piston_window::{PistonWindow, Window, WindowSettings};
 use self::piston_window::{G2d, G2dTexture, TextureSettings, Texture, Flip};
@@ -12,7 +12,8 @@ use self::piston_window::OpenGL;
 use self::piston_window::texture::UpdateTexture;
 
 use qwe::core::state::State;
-use qwe::core::websocket::chat::Client;
+use qwe::core::websocket::chat::Client as ChatClient;
+use qwe::core::websocket::movement::Client as MoveClient;
 
 extern crate conrod_core;
 extern crate rand;
@@ -80,12 +81,8 @@ pub fn main() {
             Flip::None,
             &TextureSettings::new()
     ).unwrap());
-    let mut sprite = Sprite::from_texture(tex.clone());
-    sprite.set_position(-500.0, -500.0);
-    let id = scene.add_child(sprite);
 
-
-    let mut state = State::new(&mut ui, id);
+    let mut state = State::new(&mut ui, tex.clone());
 
 
     let (tx_receive, rx_receive) = mpsc::channel();
@@ -94,8 +91,21 @@ pub fn main() {
     state.chat_sender = Some(&tx_send);
 
     thread::spawn(move || {
-        connect("ws://127.0.0.1:3333/chat", |out| Client::new(out, &tx_receive, &rx_send) ).unwrap()
+        connect("ws://127.0.0.1:3333/chat", |out| ChatClient::new(out, &tx_receive, &rx_send) ).unwrap()
     });
+
+
+    let (tx_move_receive, rx_move_receive) = mpsc::channel();
+    let (tx_move_send, rx_move_send) = mpsc::channel();
+    state.move_receiver = Some(&rx_move_receive);
+    state.move_sender = Some(&tx_move_send);
+
+    thread::spawn(move || {
+        connect("ws://127.0.0.1:3333/move", |out| MoveClient::new(out, &tx_move_receive, &rx_move_send) ).unwrap()
+    });
+
+
+
 
     let font_path = assets.join("fonts/FiraSans-Regular.ttf");
     ui.fonts.insert_from_file(font_path).unwrap();

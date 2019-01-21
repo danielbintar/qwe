@@ -1,9 +1,22 @@
+use serde_derive::{Deserialize, Serialize};
+
 use crate::core::state::content::Content;
+use crate::core::object::user::UserPosition;
 use piston_window::Event;
 use piston::input::{Input, Button};
 
+use sprite::Sprite;
+
 pub struct Town {
     ids: Ids,
+    players: Vec<UserPosition>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TownResponse {
+    id: u32,
+    name: String,
+    users: Vec<UserPosition>,
 }
 
 widget_ids! {
@@ -20,10 +33,62 @@ impl Town {
     pub fn new(ui: &mut conrod_core::Ui) -> Self {
         Self {
             ids: Ids::new(ui.widget_id_generator()),
+            players: Vec::new(),
         }
     }
 
-    pub fn perform<I: graphics::ImageSize>(&mut self, ui: &mut conrod_core::UiCell, content: &mut Content, chat_sender: Option<&std::sync::mpsc::Sender<String>>, scene: &mut sprite::Scene<I>, player_sprite: uuid::Uuid, event: &Event) {
+    fn generate_players(&mut self) {
+        let mut resp = reqwest::Client::new()
+            .get("http://localhost:3333/towns/1?username=thisuser&password=password")
+            .send().unwrap();
+
+        if resp.status().is_success() {
+            let response: TownResponse = resp.json().unwrap();
+            self.players = response.users;
+        } else if resp.status().is_server_error() {
+
+        } else {
+
+        }
+    }
+
+    pub fn manage_move<I: graphics::ImageSize>(&self, msg: String, scene: &mut sprite::Scene<I>, ui: &mut conrod_core::UiCell) {
+        let user_position: UserPosition = serde_json::from_str(&msg).unwrap();
+
+        let mut temp = None;
+        for player in &self.players {
+            if player.id == user_position.id {
+                temp = player.sprite_id;
+                break;
+            }
+        }
+        match temp {
+            Some(x) => {
+                let tempp = scene.child_mut(x);
+                match tempp {
+                    Some(y) => {
+                        y.set_position(user_position.get_x(), user_position.get_y());
+                        ui.needs_redraw()
+                    },
+                    None => {}
+                }
+            },
+            None => {}
+        }
+    }
+
+    pub fn start<I: graphics::ImageSize>(&mut self, scene: &mut sprite::Scene<I>, player_tex: std::rc::Rc<I>) {
+        self.generate_players();
+
+        for player in &mut self.players {
+            let mut sprite = Sprite::from_texture(player_tex.clone());
+            sprite.set_position(player.get_x(), player.get_y());
+            let id = scene.add_child(sprite);
+            player.sprite_id = Some(id);
+        }
+    }
+
+    pub fn perform(&mut self, ui: &mut conrod_core::UiCell, content: &mut Content, chat_sender: Option<&std::sync::mpsc::Sender<String>>, event: &Event, move_sender: Option<&std::sync::mpsc::Sender<String>>) {
         use conrod_core::{widget, Labelable, Positionable, Sizeable, Widget};
 
         const MARGIN: conrod_core::Scalar = 30.0;
@@ -70,29 +135,38 @@ impl Town {
             .line_spacing(5.0)
             .set(self.ids.chat, ui);
 
-        let temp = scene.child_mut(player_sprite);
-        match temp {
-            Some(x) => { x.set_position(content.current_character.position.x, content.current_character.position.y) },
+        self.handle_input(content, event, move_sender);
+    }
+
+    fn handle_input(&mut self, content: &mut Content, event: &Event, move_sender: Option<&std::sync::mpsc::Sender<String>>) {
+        let mut id = 0;
+        match &content.current_user {
+            Some(x) => {
+                id = x.id;
+            },
             None => {}
         }
 
-        self.handle_input(ui, content, event);
-    }
-
-    fn handle_input(&mut self, ui: &mut conrod_core::UiCell, content: &mut Content, event: &Event) {
         if let Event::Input(input) = event {
             if let Input::Button(button_args) = input {
                 if let Button::Keyboard(key) = button_args.button {
                     let mut moving = false;
                     match key {
-                        input::keyboard::Key::Up => { content.current_character.position.y -= 10.0; moving = true },
-                        input::keyboard::Key::Down => { content.current_character.position.y += 10.0; moving = true },
-                        input::keyboard::Key::Right => { content.current_character.position.x += 10.0; moving = true },
-                        input::keyboard::Key::Left => { content.current_character.position.x -= 10.0; moving = true },
+                        input::keyboard::Key::Up => { content.current_character.position.y -= 1; moving = true },
+                        input::keyboard::Key::Down => { content.current_character.position.y += 1; moving = true },
+                        input::keyboard::Key::Right => { content.current_character.position.x += 1; moving = true },
+                        input::keyboard::Key::Left => { content.current_character.position.x -= 1; moving = true },
                         _ => {}
                     }
+
                     if moving {
-                        ui.needs_redraw()
+                        match &move_sender {
+                            Some(sender) => {
+                                let m = UserPosition::new(id, content.current_character.position.x, content.current_character.position.y);
+                                sender.send(serde_json::to_string(&m).unwrap()).unwrap();
+                            }
+                            None => {}
+                        }
                     }
                 }
             }
