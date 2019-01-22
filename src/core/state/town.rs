@@ -198,10 +198,10 @@ impl Town {
                 if let Button::Keyboard(key) = button_args.button {
                     let mut moving = false;
                     match key {
-                        input::keyboard::Key::Up => { content.current_character.position.y -= 1; moving = true },
-                        input::keyboard::Key::Down => { content.current_character.position.y += 1; moving = true },
-                        input::keyboard::Key::Right => { content.current_character.position.x += 1; moving = true },
-                        input::keyboard::Key::Left => { content.current_character.position.x -= 1; moving = true },
+                        input::keyboard::Key::Up => { content.current_character.move_horizontal(1, false); moving = true },
+                        input::keyboard::Key::Down => { content.current_character.move_horizontal(1, true); moving = true },
+                        input::keyboard::Key::Right => { content.current_character.move_vertical(1, true); moving = true },
+                        input::keyboard::Key::Left => { content.current_character.move_vertical(1, false); moving = true },
                         _ => {}
                     }
 
