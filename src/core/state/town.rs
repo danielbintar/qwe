@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde_derive::{Deserialize, Serialize};
 
 use crate::core::state::content::Content;
@@ -77,14 +79,58 @@ impl Town {
         }
     }
 
-    pub fn start<I: graphics::ImageSize>(&mut self, scene: &mut sprite::Scene<I>, player_tex: std::rc::Rc<I>) {
+    fn enter_request(&mut self, content: &mut Content) {
+        let mut map = HashMap::new();
+        let current_user = content.current_user.clone().unwrap();
+        map.insert("username", &current_user.username[..]);
+        map.insert("password", &current_user.password[..]);
+
+        let mut resp = reqwest::Client::new()
+            .post("http://localhost:3333/towns/1/enter")
+            .json(&map)
+            .send().unwrap();
+
+        if resp.status().is_success() {
+            let response: TownResponse = resp.json().unwrap();
+            self.players = response.users;
+        } else if resp.status().is_server_error() {
+
+        } else {
+
+        }
+    }
+
+    pub fn start<I: graphics::ImageSize>(&mut self, scene: &mut sprite::Scene<I>, player_tex: std::rc::Rc<I>, content: &mut Content) {
         self.generate_players();
+
+        let mut found = false;
+        for player in &mut self.players {
+            let temp = &content.current_user;
+            if let Some(current_user) = temp {
+                if player.id == current_user.id {
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        if !found {
+            self.enter_request(content);
+        }
 
         for player in &mut self.players {
             let mut sprite = Sprite::from_texture(player_tex.clone());
             sprite.set_position(player.get_x(), player.get_y());
             let id = scene.add_child(sprite);
             player.sprite_id = Some(id);
+
+            let temp = &content.current_user;
+            if let Some(current_user) = temp {
+                if player.id == current_user.id {
+                    content.current_character.position.x = player.get_real_x();
+                    content.current_character.position.y = player.get_real_y();
+                }
+            }
         }
     }
 

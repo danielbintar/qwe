@@ -85,7 +85,7 @@ impl<'a, I: graphics::ImageSize> State<'a, I> {
         match x.action {
             Some(character_selection::Action::EnterGame) => {
                 self.current_page = Page::Town;
-                self.town_page.start(scene, self.player_tex.clone())
+                self.town_page.start(scene, self.player_tex.clone(), &mut self.content)
             },
             None => {},
         }

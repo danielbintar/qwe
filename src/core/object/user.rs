@@ -1,10 +1,10 @@
 use serde_derive::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct User {
     pub id: u32,
     pub username: String,
-    password: String,
+    pub password: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -29,7 +29,15 @@ impl UserPosition {
 		self.x as f64 * 100.0
 	}
 
+	pub fn get_real_x(&self) -> u32 {
+		self.x
+	}
+
 	pub fn get_y(&self) -> f64 {
 		self.y as f64 * 100.0
+	}
+
+	pub fn get_real_y(&self) -> u32 {
+		self.y
 	}
 }
