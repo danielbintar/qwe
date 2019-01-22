@@ -1,13 +1,19 @@
 extern crate find_folder;
 extern crate piston_window;
 extern crate conrod_piston;
+extern crate sprite;
+extern crate piston;
 
-use self::piston_window::{PistonWindow, UpdateEvent, Window, WindowSettings};
-use self::piston_window::{G2d, G2dTexture, TextureSettings};
+use sprite::Scene;
+
+use self::piston_window::{PistonWindow, Window, WindowSettings};
+use self::piston_window::{G2d, G2dTexture, TextureSettings, Texture, Flip};
 use self::piston_window::OpenGL;
 use self::piston_window::texture::UpdateTexture;
 
 use qwe::core::state::State;
+use qwe::core::websocket::chat::Client as ChatClient;
+use qwe::core::websocket::movement::Client as MoveClient;
 
 extern crate conrod_core;
 extern crate rand;
@@ -18,9 +24,10 @@ extern crate serde;
 extern crate serde_json;
 
 extern crate ws;
-use ws::{connect, Frame, Handler, Sender, Handshake, Result, Message};
+use ws::{connect};
 use std::thread;
 use std::sync::mpsc;
+use std::rc::Rc;
 
 pub const WIN_W: u32 = 600;
 pub const WIN_H: u32 = 420;
@@ -47,36 +54,6 @@ pub fn theme() -> conrod_core::Theme {
     }
 }
 
-struct Client<'a> {
-    out: Sender,
-    tx: &'a std::sync::mpsc::Sender<String>,
-    rx: &'a std::sync::mpsc::Receiver<String>,
-}
-
-impl<'a> Handler for Client<'a> {
-
-    fn on_frame(&mut self, frame: Frame) -> Result<Option<Frame>> {
-        let received = self.rx.try_recv();
-        match received {
-            Ok(msg) => {
-                self.out.send(msg).unwrap();
-            },
-            Err(_) => { self.out.ping(Vec::new()).unwrap(); }
-        }
-        Ok(Some(frame))
-    }
-
-    fn on_open(&mut self, _: Handshake) -> Result<()> {
-        self.out.ping(Vec::new()).unwrap();
-        Ok(())
-    }
-
-    fn on_message(&mut self, msg: Message) -> Result<()> {
-        self.tx.send(msg.to_string()).unwrap();
-        Ok(())
-    }
-}
-
 pub fn main() {
     const WIDTH: u32 = 1920;
     const HEIGHT: u32 = 1080;
@@ -94,7 +71,18 @@ pub fn main() {
         .theme(theme())
         .build();
 
-    let mut state = State::new(&mut ui);
+    let assets = find_folder::Search::KidsThenParents(3, 5).for_folder("assets").unwrap();
+
+    let mut scene = Scene::new();
+
+    let tex = Rc::new(Texture::from_path(
+            &mut window.factory,
+            assets.join("sprites/player/idle1.png"),
+            Flip::None,
+            &TextureSettings::new()
+    ).unwrap());
+
+    let mut state = State::new(&mut ui, tex.clone());
 
 
     let (tx_receive, rx_receive) = mpsc::channel();
@@ -103,10 +91,22 @@ pub fn main() {
     state.chat_sender = Some(&tx_send);
 
     thread::spawn(move || {
-        connect("ws://127.0.0.1:3333/chat", |out| Client { out: out, tx: &tx_receive, rx: &rx_send } ).unwrap()
+        connect("ws://127.0.0.1:3333/chat", |out| ChatClient::new(out, &tx_receive, &rx_send) ).unwrap()
     });
 
-    let assets = find_folder::Search::KidsThenParents(3, 5).for_folder("assets").unwrap();
+
+    let (tx_move_receive, rx_move_receive) = mpsc::channel();
+    let (tx_move_send, rx_move_send) = mpsc::channel();
+    state.move_receiver = Some(&rx_move_receive);
+    state.move_sender = Some(&tx_move_send);
+
+    thread::spawn(move || {
+        connect("ws://127.0.0.1:3333/move", |out| MoveClient::new(out, &tx_move_receive, &rx_move_send) ).unwrap()
+    });
+
+
+
+
     let font_path = assets.join("fonts/FiraSans-Regular.ttf");
     ui.fonts.insert_from_file(font_path).unwrap();
 
@@ -130,6 +130,7 @@ pub fn main() {
     let image_map = conrod_core::image::Map::new();
 
     while let Some(event) = window.next() {
+        scene.event(&event);
 
         let size = window.size();
         let (win_w, win_h) = (size.width as conrod_core::Scalar, size.height as conrod_core::Scalar);
@@ -137,12 +138,11 @@ pub fn main() {
             ui.handle_event(e);
         }
 
-        event.update(|_| {
-            let mut ui = ui.set_widgets();
-            state.perform(&mut ui);
-        });
+        let mut ui = ui.set_widgets();
+        state.perform(&mut ui, &mut scene, &event.clone());
 
         window.draw_2d(&event, |context, graphics| {
+            scene.draw(context.transform, graphics);
             if let Some(primitives) = ui.draw_if_changed() {
 
                 let cache_queued_glyphs = |graphics: &mut G2d,

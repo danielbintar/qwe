@@ -1,4 +1,4 @@
 pub struct Position {
-    pub x: f64,
-    pub y: f64,
+    pub x: u32,
+    pub y: u32,
 }
