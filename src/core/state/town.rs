@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::core::state::content::Content;
+use crate::core::state::tex::Tex;
 use crate::core::object::user::UserPosition;
 use piston_window::Event;
 use piston::input::{Input, Button};
@@ -100,7 +101,7 @@ impl Town {
         }
     }
 
-    pub fn start<I: graphics::ImageSize>(&mut self, scene: &mut sprite::Scene<I>, player_tex: std::rc::Rc<I>, content: &mut Content) {
+    pub fn start<I: graphics::ImageSize>(&mut self, scene: &mut sprite::Scene<I>, tex: &Tex<I>, content: &mut Content) {
         self.generate_players();
 
         let mut found = false;
@@ -119,7 +120,7 @@ impl Town {
         }
 
         for player in &mut self.players {
-            let mut sprite = Sprite::from_texture(player_tex.clone());
+            let mut sprite = Sprite::from_texture(tex.get_player().clone());
             sprite.set_position(player.get_x(), player.get_y());
             let id = scene.add_child(sprite);
             player.sprite_id = Some(id);

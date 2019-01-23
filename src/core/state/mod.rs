@@ -2,12 +2,13 @@ mod content;
 mod login;
 mod character_selection;
 mod town;
-
+mod tex;
 
 use self::login::Login;
 use self::character_selection::CharacterSelection;
 use self::town::Town;
 use self::content::Content;
+use self::tex::Tex;
 
 pub struct State<'a, I: graphics::ImageSize> {
     current_page: Page,
@@ -16,12 +17,11 @@ pub struct State<'a, I: graphics::ImageSize> {
     pub move_receiver: Option<&'a std::sync::mpsc::Receiver<String>>,
     pub move_sender: Option<&'a std::sync::mpsc::Sender<String>>,
     pub content: Content,
+    pub tex: Tex<I>,
 
     character_selection_page: CharacterSelection,
     login_page: Login,
     town_page: Town,
-
-    player_tex: std::rc::Rc<I>,
 }
 
 enum Page {
@@ -43,7 +43,7 @@ impl<'a, I: graphics::ImageSize> State<'a, I> {
             character_selection_page: CharacterSelection::new(ui),
             town_page: Town::new(ui),
 
-            player_tex,
+            tex: Tex::new(player_tex.clone()),
         }
     }
 
@@ -85,7 +85,7 @@ impl<'a, I: graphics::ImageSize> State<'a, I> {
         match x.action {
             Some(character_selection::Action::EnterGame) => {
                 self.current_page = Page::Town;
-                self.town_page.start(scene, self.player_tex.clone(), &mut self.content)
+                self.town_page.start(scene, &self.tex , &mut self.content)
             },
             None => {},
         }
