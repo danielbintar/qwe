@@ -1,3 +1,5 @@
+This repo is currently on hold because piston is hella slow.
+
 # Goal
 - [X] AUTH - 13/1/2019
 - [X] CHAT - 17/1/2019
